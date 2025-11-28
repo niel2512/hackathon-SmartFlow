@@ -53,7 +53,8 @@ export const zapierConfig = {
 }
 
 export function generateZapierWebhookUrl(ruleId: string, baseUrl: string): string {
-  return `${baseUrl}/api/webhooks/zapier/${ruleId}`
+  const finalUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || "https://hackathon-smart-flow.vercel.app";
+  return `${finalUrl}/api/webhooks/zapier/${ruleId}`
 }
 
 export function generateZapierInstructions(rule: WorkflowRule, webhookUrl: string): string {
