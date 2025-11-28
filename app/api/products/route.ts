@@ -6,7 +6,7 @@ import { auditLog } from "@/lib/audit-log"
 
 export async function GET() {
   try {
-    const products = await db.getProducts()
+    const products = db.getProducts()
     return NextResponse.json(products)
   } catch (error) {
     return handleApiError(error)
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(validation.errors)
     }
 
-    const newProduct = await db.createProduct(product)
+    const newProduct = db.createProduct(product)
 
     await auditLog.record({
       userId: "system",

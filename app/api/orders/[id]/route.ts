@@ -7,7 +7,7 @@ import { auditLog } from "@/lib/audit-log"
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const order = await db.getOrder(id)
+    const order = db.getOrder(id)
     if (!order) {
       return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Order not found")
     }
@@ -21,7 +21,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { id } = await params
     const updates = await request.json()
-    const order = await db.getOrder(id)
+    const order = db.getOrder(id)
 
     if (!order) {
       return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Order not found")
@@ -31,14 +31,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (updates.status === "Completed" && order.status !== "Completed") {
       for (const item of order.items) {
-        const product = await db.getProduct(item.productId)
+        const product = db.getProduct(item.productId)
         if (product) {
           const newStock = Math.max(0, product.stock - item.quantity)
-          await db.updateProduct(item.productId, { stock: newStock })
+          db.updateProduct(item.productId, { stock: newStock })
 
           if (newStock < product.minStock) {
             const alertMessage = `Low stock alert: ${product.name} (${newStock} units remaining)`
-            await db.addNotification({
+            db.addNotification({
               message: alertMessage,
               type: "Stock",
             })
@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           }
         }
       }
-      const updatedOrder = await db.updateOrderStatus(id, updates.status)
+      const updatedOrder = db.updateOrderStatus(id, updates.status)
 
       await auditLog.record({
         userId: "system",
@@ -77,7 +77,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         return validationErrorResponse(validation.errors)
       }
 
-      const updatedOrder = await db.updateOrder(id, updates)
+      const updatedOrder = db.updateOrder(id, updates)
 
       await auditLog.record({
         userId: "system",
@@ -91,7 +91,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json(updatedOrder)
     }
 
-    const updatedOrder = await db.updateOrderStatus(id, updates.status)
+    const updatedOrder = db.updateOrderStatus(id, updates.status)
     return NextResponse.json({
       ...updatedOrder,
       lowStockAlerts,
@@ -104,21 +104,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const order = await db.getOrder(id)
+    const order = db.getOrder(id)
 
     if (!order) {
       return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Order not found")
     }
 
     for (const item of order.items) {
-      const product = await db.getProduct(item.productId)
+      const product = db.getProduct(item.productId)
       if (product) {
         const newStock = product.stock + item.quantity
-        await db.updateProduct(item.productId, { stock: newStock })
+        db.updateProduct(item.productId, { stock: newStock })
       }
     }
 
-    await db.deleteOrder(id)
+    db.deleteOrder(id)
 
     await auditLog.record({
       userId: "system",

@@ -1,11 +1,9 @@
-import { createClient as createServerSupabaseClient, createServiceClient } from "@/lib/supabase/server"
-
-// Re-export interfaces for backward compatibility
+// In-memory database for SmartFlow with types
 export interface User {
   id: string
   name: string
   email: string
-  password: string
+  password: string // In production, hash passwords!
   role: "Admin" | "Staff"
   createdAt: Date
 }
@@ -49,255 +47,118 @@ export interface NotificationLog {
   createdAt: Date
 }
 
+// In-memory storage - Removed all dummy data; users, products, and orders start empty for production
+const users: User[] = []
+
+let products: Product[] = []
+
+let orders: Order[] = []
+
+let workflowRules: WorkflowRule[] = []
+
+const notificationLogs: NotificationLog[] = []
+
 export const db = {
   // User operations
-  getUser: async (email: string) => {
-    const supabase = await createServerSupabaseClient()
-    const { data, error } = await supabase.from("users").select("*").eq("email", email).single()
-
-    if (error) {
-      if (error.code === "PGRST116") return null // No rows returned
-      throw error
-    }
-    return data as User
+  getUser: (email: string) => users.find((u) => u.email === email),
+  getUserById: (id: string) => users.find((u) => u.id === id),
+  createUser: (user: Omit<User, "id" | "createdAt">) => {
+    const newUser = { ...user, id: Date.now().toString(), createdAt: new Date() }
+    users.push(newUser)
+    return newUser
   },
-
-  getUserById: async (id: string) => {
-    const supabase = await createServerSupabaseClient()
-    const { data, error } = await supabase.from("users").select("*").eq("id", id).single()
-
-    if (error) {
-      if (error.code === "PGRST116") return null
-      throw error
-    }
-    return data as User
-  },
-
-  createUser: async (user: Omit<User, "id" | "createdAt">) => {
-    const supabase = await createServerSupabaseClient()
-    const { data, error } = await supabase
-      .from("users")
-      .insert([{ ...user, created_at: new Date().toISOString() }])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data as User
-  },
-
-  getAllUsers: async () => {
-    const supabase = await createServerSupabaseClient()
-    const { data, error } = await supabase.from("users").select("*")
-
-    if (error) throw error
-    return (data || []) as User[]
-  },
+  getAllUsers: () => users,
 
   // Product operations
-  getProducts: async () => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase.from("products").select("*")
-
-    if (error) throw error
-    return (data || []) as Product[]
+  getProducts: () => products,
+  getProduct: (id: string) => products.find((p) => p.id === id),
+  createProduct: (product: Omit<Product, "id" | "createdAt">) => {
+    const newProduct = { ...product, id: Date.now().toString(), createdAt: new Date() }
+    products.push(newProduct)
+    return newProduct
   },
-
-  getProduct: async (id: string) => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase.from("products").select("*").eq("id", id).single()
-
-    if (error) {
-      if (error.code === "PGRST116") return null
-      throw error
+  updateProduct: (id: string, updates: Partial<Product>) => {
+    const index = products.findIndex((p) => p.id === id)
+    if (index !== -1) {
+      products[index] = { ...products[index], ...updates }
+      return products[index]
     }
-    return data as Product
+    return null
   },
-
-  createProduct: async (product: Omit<Product, "id" | "createdAt">) => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase
-      .from("products")
-      .insert([
-        {
-          name: product.name,
-          stock: product.stock,
-          min_stock: product.minStock,
-          price: product.price,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data as Product
-  },
-
-  updateProduct: async (id: string, updates: Partial<Product>) => {
-    const supabase = await createServiceClient()
-    const updateData: Record<string, any> = {
-      updated_at: new Date().toISOString(),
-    }
-
-    if (updates.name) updateData.name = updates.name
-    if (updates.stock !== undefined) updateData.stock = updates.stock
-    if (updates.minStock !== undefined) updateData.min_stock = updates.minStock
-    if (updates.price !== undefined) updateData.price = updates.price
-
-    const { data, error } = await supabase.from("products").update(updateData).eq("id", id).select().single()
-
-    if (error) throw error
-    return data as Product
-  },
-
-  deleteProduct: async (id: string) => {
-    const supabase = await createServiceClient()
-    const { error } = await supabase.from("products").delete().eq("id", id)
-
-    if (error) throw error
+  deleteProduct: (id: string) => {
+    products = products.filter((p) => p.id !== id)
   },
 
   // Order operations
-  getOrders: async () => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase.from("orders").select("*")
-
-    if (error) throw error
-    return (data || []) as Order[]
-  },
-
-  getOrder: async (id: string) => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase.from("orders").select("*").eq("id", id).single()
-
-    if (error) {
-      if (error.code === "PGRST116") return null
-      throw error
+  getOrders: () => orders,
+  getOrder: (id: string) => orders.find((o) => o.id === id),
+  createOrder: (order: Omit<Order, "id" | "createdAt" | "updatedAt">) => {
+    const newOrder = {
+      ...order,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }
-    return data as Order
-  },
-
-  createOrder: async (order: Omit<Order, "id" | "createdAt" | "updatedAt">) => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase
-      .from("orders")
-      .insert([
-        {
-          customer_name: order.customerName,
-          status: order.status,
-          total: order.total,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ])
-      .select()
-      .single()
-
-    if (error) throw error
-
-    // Add notification for new order
-    await db.addNotification({
-      message: `New order created: ${order.customerName}`,
+    orders.push(newOrder)
+    notificationLogs.push({
+      id: Date.now().toString(),
+      message: `New order created: ${newOrder.customerName}`,
       type: "Order",
+      createdAt: new Date(),
     })
-
-    return data as Order
+    return newOrder
   },
+  updateOrderStatus: (id: string, status: Order["status"]) => {
+    const index = orders.findIndex((o) => o.id === id)
+    if (index !== -1) {
+      orders[index] = { ...orders[index], status, updatedAt: new Date() }
 
-  updateOrderStatus: async (id: string, status: Order["status"]) => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase
-      .from("orders")
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .select()
-      .single()
+      // Trigger automation when order is completed
+      if (status === "Completed") {
+        notificationLogs.push({
+          id: Date.now().toString(),
+          message: `Order Completed → Notification Sent for ${orders[index].customerName}`,
+          type: "Automation",
+          createdAt: new Date(),
+        })
+      }
 
-    if (error) throw error
-
-    // Trigger automation when order is completed
-    if (status === "Completed") {
-      const order = data as Order
-      await db.addNotification({
-        message: `Order Completed → Notification Sent for ${order.customer_name}`,
-        type: "Automation",
-      })
+      return orders[index]
     }
-
-    return data as Order
+    return null
   },
-
-  deleteOrder: async (id: string) => {
-    const supabase = await createServiceClient()
-    const { error } = await supabase.from("orders").delete().eq("id", id)
-
-    if (error) throw error
+  deleteOrder: (id: string) => {
+    orders = orders.filter((o) => o.id !== id)
   },
-
-  updateOrder: async (id: string, updates: Partial<Order>) => {
-    const supabase = await createServiceClient()
-    const updateData: Record<string, any> = {
-      updated_at: new Date().toISOString(),
+  updateOrder: (id: string, updates: Partial<Order>) => {
+    const index = orders.findIndex((o) => o.id === id)
+    if (index !== -1) {
+      orders[index] = { ...orders[index], ...updates, updatedAt: new Date() }
+      return orders[index]
     }
-
-    if (updates.customerName) updateData.customer_name = updates.customerName
-    if (updates.status) updateData.status = updates.status
-    if (updates.total !== undefined) updateData.total = updates.total
-    if (updates.items) updateData.items = updates.items
-
-    const { data, error } = await supabase.from("orders").update(updateData).eq("id", id).select().single()
-
-    if (error) throw error
-    return data as Order
+    return null
   },
 
   // Workflow operations
-  getWorkflowRules: async () => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase.from("workflow_rules").select("*")
-
-    if (error) throw error
-    return (data || []) as WorkflowRule[]
+  getWorkflowRules: () => workflowRules,
+  createWorkflowRule: (rule: Omit<WorkflowRule, "id" | "createdAt">) => {
+    const newRule = { ...rule, id: Date.now().toString(), createdAt: new Date() }
+    workflowRules.push(newRule)
+    return newRule
   },
-
-  createWorkflowRule: async (rule: Omit<WorkflowRule, "id" | "createdAt">) => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase
-      .from("workflow_rules")
-      .insert([{ ...rule, created_at: new Date().toISOString() }])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data as WorkflowRule
-  },
-
-  deleteWorkflowRule: async (id: string) => {
-    const supabase = await createServiceClient()
-    const { error } = await supabase.from("workflow_rules").delete().eq("id", id)
-
-    if (error) throw error
+  deleteWorkflowRule: (id: string) => {
+    workflowRules = workflowRules.filter((r) => r.id !== id)
   },
 
   // Notification operations
-  getNotifications: async () => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase.from("notification_logs").select("*")
-
-    if (error) throw error
-    return (data || []) as NotificationLog[]
-  },
-
-  addNotification: async (notification: Omit<NotificationLog, "id" | "createdAt">) => {
-    const supabase = await createServiceClient()
-    const { data, error } = await supabase
-      .from("notification_logs")
-      .insert([{ ...notification, created_at: new Date().toISOString() }])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data as NotificationLog
+  getNotifications: () => notificationLogs,
+  addNotification: (notification: Omit<NotificationLog, "id" | "createdAt">) => {
+    const newNotification = {
+      ...notification,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+    }
+    notificationLogs.push(newNotification)
+    return newNotification
   },
 }

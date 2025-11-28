@@ -7,7 +7,7 @@ import { auditLog } from "@/lib/audit-log"
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const product = await db.getProduct(id)
+    const product = db.getProduct(id)
     if (!product) {
       return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Product not found")
     }
@@ -23,14 +23,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const updates = await request.json()
 
     if (Object.keys(updates).length > 0) {
-      const product = await db.getProduct(id)
-      const validation = validateProduct({ ...product, ...updates })
+      const validation = validateProduct({ ...db.getProduct(id), ...updates })
       if (!validation.valid) {
         return validationErrorResponse(validation.errors)
       }
     }
 
-    const product = await db.updateProduct(id, updates)
+    const product = db.updateProduct(id, updates)
     if (!product) {
       return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Product not found")
     }
@@ -53,13 +52,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const product = await db.getProduct(id)
+    const product = db.getProduct(id)
 
     if (!product) {
       return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Product not found")
     }
 
-    await db.deleteProduct(id)
+    db.deleteProduct(id)
 
     await auditLog.record({
       userId: "system",

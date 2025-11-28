@@ -6,7 +6,7 @@ import { auditLog } from "@/lib/audit-log"
 
 export async function GET() {
   try {
-    return NextResponse.json(await db.getOrders())
+    return NextResponse.json(db.getOrders())
   } catch (error) {
     return handleApiError(error)
   }
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     if (order.items && Array.isArray(order.items)) {
       for (const item of order.items) {
-        const product = await db.getProduct(item.productId)
+        const product = db.getProduct(item.productId)
         if (!product) {
           return createErrorResponse(400, ErrorCodes.NOT_FOUND, `Product with ID ${item.productId} not found`)
         }
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const newOrder = await db.createOrder(order)
+    const newOrder = db.createOrder(order)
 
     await auditLog.record({
       userId: "system",
