@@ -9,17 +9,17 @@ export function Sidebar() {
   const pathname = usePathname()
   const { user, loading } = useAuth()
 
+  const adminOnlyItems = [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/automation", label: "Automation" },
+    { href: "/staff", label: "Staff" },
+  ]
   const baseNavItems = [
     { href: "/orders", label: "Orders" },
     { href: "/inventory", label: "Inventory" },
     { href: "/notifications", label: "Notifications" },
   ]
 
-  const adminOnlyItems = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/automation", label: "Automation" },
-    { href: "/staff", label: "Staff" },
-  ]
 
   const navItems = user?.role === "Admin" ? [...baseNavItems, ...adminOnlyItems] : baseNavItems
 
