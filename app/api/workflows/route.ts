@@ -1,13 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getWorkflowRules, createWorkflowRule } from "@/lib/supabase-service"
+import { db } from "@/lib/db"
 import { validateWorkflowRule, validationErrorResponse } from "@/lib/validation"
 import { handleApiError } from "@/lib/error-handler"
 import { auditLog } from "@/lib/audit-log"
 
 export async function GET() {
   try {
-    const rules = await getWorkflowRules()
-    return NextResponse.json(rules)
+    return NextResponse.json(db.getWorkflowRules())
   } catch (error) {
     return handleApiError(error)
   }
@@ -22,7 +21,7 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(validation.errors)
     }
 
-    const newRule = await createWorkflowRule(rule)
+    const newRule = db.createWorkflowRule(rule)
 
     await auditLog.record({
       userId: "system",
