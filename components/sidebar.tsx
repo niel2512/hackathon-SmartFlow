@@ -10,13 +10,13 @@ export function Sidebar() {
   const { user, loading } = useAuth()
 
   const baseNavItems = [
-    { href: "/dashboard", label: "Dashboard" },
     { href: "/orders", label: "Orders" },
     { href: "/inventory", label: "Inventory" },
     { href: "/notifications", label: "Notifications" },
   ]
 
   const adminOnlyItems = [
+    { href: "/dashboard", label: "Dashboard" },
     { href: "/automation", label: "Automation" },
     { href: "/staff", label: "Staff" },
   ]

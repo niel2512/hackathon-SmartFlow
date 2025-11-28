@@ -1,82 +1,136 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { validateOrder, validationErrorResponse } from "@/lib/validation"
+import { handleApiError, createErrorResponse, ErrorCodes } from "@/lib/error-handler"
+import { auditLog } from "@/lib/audit-log"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const { id } = params
-  const order = db.getOrder(id)
-  if (!order) {
-    return NextResponse.json({ error: "Order not found" }, { status: 404 })
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const order = db.getOrder(id)
+    if (!order) {
+      return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Order not found")
+    }
+    return NextResponse.json(order)
+  } catch (error) {
+    return handleApiError(error)
   }
-  return NextResponse.json(order)
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const { id } = params
-  const updates = await request.json()
-  const order = db.getOrder(id)
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const updates = await request.json()
+    const order = db.getOrder(id)
 
-  if (!order) {
-    return NextResponse.json({ error: "Order not found" }, { status: 404 })
-  }
+    if (!order) {
+      return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Order not found")
+    }
 
-  const lowStockAlerts: string[] = []
+    const lowStockAlerts: string[] = []
 
-  if (updates.status === "Completed" && order.status !== "Completed") {
-    for (const item of order.items) {
-      const product = db.getProduct(item.productId)
-      if (product) {
-        const newStock = Math.max(0, product.stock - item.quantity)
-        db.updateProduct(item.productId, { stock: newStock })
+    if (updates.status === "Completed" && order.status !== "Completed") {
+      for (const item of order.items) {
+        const product = db.getProduct(item.productId)
+        if (product) {
+          const newStock = Math.max(0, product.stock - item.quantity)
+          db.updateProduct(item.productId, { stock: newStock })
 
-        if (newStock < product.minStock) {
-          const alertMessage = `Low stock alert: ${product.name} (${newStock} units remaining)`
-          db.addNotification({
-            message: alertMessage,
-            type: "Stock",
-          })
-          lowStockAlerts.push(alertMessage)
+          if (newStock < product.minStock) {
+            const alertMessage = `Low stock alert: ${product.name} (${newStock} units remaining)`
+            db.addNotification({
+              message: alertMessage,
+              type: "Stock",
+            })
+            lowStockAlerts.push(alertMessage)
+          }
         }
       }
+      const updatedOrder = db.updateOrderStatus(id, updates.status)
+
+      await auditLog.record({
+        userId: "system",
+        userEmail: "system@smartflow.local",
+        action: "UPDATE_ORDER_STATUS",
+        entityType: "Order",
+        entityId: id,
+        changes: { status: updates.status, previousStatus: order.status },
+      })
+
+      return NextResponse.json({
+        ...updatedOrder,
+        lowStockAlerts,
+      })
     }
+
+    if (updates.items || updates.customerName) {
+      if (order.status !== "Pending") {
+        return createErrorResponse(
+          400,
+          ErrorCodes.INVALID_OPERATION,
+          "Cannot edit order - only pending orders can be edited",
+        )
+      }
+
+      const validation = validateOrder({ ...order, ...updates })
+      if (!validation.valid) {
+        return validationErrorResponse(validation.errors)
+      }
+
+      const updatedOrder = db.updateOrder(id, updates)
+
+      await auditLog.record({
+        userId: "system",
+        userEmail: "system@smartflow.local",
+        action: "UPDATE_ORDER",
+        entityType: "Order",
+        entityId: id,
+        changes: updates,
+      })
+
+      return NextResponse.json(updatedOrder)
+    }
+
     const updatedOrder = db.updateOrderStatus(id, updates.status)
     return NextResponse.json({
       ...updatedOrder,
       lowStockAlerts,
     })
+  } catch (error) {
+    return handleApiError(error)
   }
-
-  if (updates.items || updates.customerName) {
-    if (order.status !== "Pending") {
-      return NextResponse.json({ error: "Cannot edit order - only pending orders can be edited" }, { status: 400 })
-    }
-
-    const updatedOrder = db.updateOrder(id, updates)
-    return NextResponse.json(updatedOrder)
-  }
-
-  const updatedOrder = db.updateOrderStatus(id, updates.status)
-  return NextResponse.json({
-    ...updatedOrder,
-    lowStockAlerts,
-  })
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const { id } = params
-  const order = db.getOrder(id)
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const order = db.getOrder(id)
 
-  if (!order) {
-    return NextResponse.json({ error: "Order not found" }, { status: 404 })
-  }
-
-  for (const item of order.items) {
-    const product = db.getProduct(item.productId)
-    if (product) {
-      const newStock = product.stock + item.quantity
-      db.updateProduct(item.productId, { stock: newStock })
+    if (!order) {
+      return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Order not found")
     }
-  }
 
-  db.deleteOrder(id)
-  return NextResponse.json({ success: true, message: "Order deleted and stock returned to inventory" })
+    for (const item of order.items) {
+      const product = db.getProduct(item.productId)
+      if (product) {
+        const newStock = product.stock + item.quantity
+        db.updateProduct(item.productId, { stock: newStock })
+      }
+    }
+
+    db.deleteOrder(id)
+
+    await auditLog.record({
+      userId: "system",
+      userEmail: "system@smartflow.local",
+      action: "DELETE_ORDER",
+      entityType: "Order",
+      entityId: id,
+      changes: { deleted: order },
+    })
+
+    return NextResponse.json({ success: true, message: "Order deleted and stock returned to inventory" })
+  } catch (error) {
+    return handleApiError(error)
+  }
 }

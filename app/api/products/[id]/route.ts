@@ -1,27 +1,76 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { validateProduct, validationErrorResponse } from "@/lib/validation"
+import { handleApiError, createErrorResponse, ErrorCodes } from "@/lib/error-handler"
+import { auditLog } from "@/lib/audit-log"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const product = db.getProduct(id)
-  if (!product) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 })
+  try {
+    const { id } = await params
+    const product = db.getProduct(id)
+    if (!product) {
+      return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Product not found")
+    }
+    return NextResponse.json(product)
+  } catch (error) {
+    return handleApiError(error)
   }
-  return NextResponse.json(product)
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const updates = await request.json()
-  const product = db.updateProduct(id, updates)
-  if (!product) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 })
+  try {
+    const { id } = await params
+    const updates = await request.json()
+
+    if (Object.keys(updates).length > 0) {
+      const validation = validateProduct({ ...db.getProduct(id), ...updates })
+      if (!validation.valid) {
+        return validationErrorResponse(validation.errors)
+      }
+    }
+
+    const product = db.updateProduct(id, updates)
+    if (!product) {
+      return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Product not found")
+    }
+
+    await auditLog.record({
+      userId: "system",
+      userEmail: "system@smartflow.local",
+      action: "UPDATE_PRODUCT",
+      entityType: "Product",
+      entityId: id,
+      changes: updates,
+    })
+
+    return NextResponse.json(product)
+  } catch (error) {
+    return handleApiError(error)
   }
-  return NextResponse.json(product)
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  db.deleteProduct(id)
-  return NextResponse.json({ success: true })
+  try {
+    const { id } = await params
+    const product = db.getProduct(id)
+
+    if (!product) {
+      return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Product not found")
+    }
+
+    db.deleteProduct(id)
+
+    await auditLog.record({
+      userId: "system",
+      userEmail: "system@smartflow.local",
+      action: "DELETE_PRODUCT",
+      entityType: "Product",
+      entityId: id,
+      changes: { deleted: product },
+    })
+
+    return NextResponse.json({ success: true, message: "Product deleted successfully" })
+  } catch (error) {
+    return handleApiError(error)
+  }
 }

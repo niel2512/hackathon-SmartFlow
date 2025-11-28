@@ -1,12 +1,39 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
+import { validateWorkflowRule, validationErrorResponse } from "@/lib/validation"
+import { handleApiError } from "@/lib/error-handler"
+import { auditLog } from "@/lib/audit-log"
 
 export async function GET() {
-  return NextResponse.json(db.getWorkflowRules())
+  try {
+    return NextResponse.json(db.getWorkflowRules())
+  } catch (error) {
+    return handleApiError(error)
+  }
 }
 
 export async function POST(request: NextRequest) {
-  const rule = await request.json()
-  const newRule = db.createWorkflowRule(rule)
-  return NextResponse.json(newRule)
+  try {
+    const rule = await request.json()
+
+    const validation = validateWorkflowRule(rule)
+    if (!validation.valid) {
+      return validationErrorResponse(validation.errors)
+    }
+
+    const newRule = db.createWorkflowRule(rule)
+
+    await auditLog.record({
+      userId: "system",
+      userEmail: "system@smartflow.local",
+      action: "CREATE_WORKFLOW",
+      entityType: "Workflow",
+      entityId: newRule.id,
+      changes: { created: newRule },
+    })
+
+    return NextResponse.json(newRule, { status: 201 })
+  } catch (error) {
+    return handleApiError(error)
+  }
 }
