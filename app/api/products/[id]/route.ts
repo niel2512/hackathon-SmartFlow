@@ -4,28 +4,22 @@ import { validateProduct, validationErrorResponse } from "@/lib/validation"
 import { handleApiError, createErrorResponse, ErrorCodes } from "@/lib/error-handler"
 import { auditLog } from "@/lib/audit-log"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     const product = db.getProduct(id)
     if (!product) {
       return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Product not found")
     }
-    return NextResponse.json(product, {
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        Pragma: "no-cache",
-        Expires: "0",
-      },
-    })
+    return NextResponse.json(product)
   } catch (error) {
     return handleApiError(error)
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     const updates = await request.json()
 
     if (Object.keys(updates).length > 0) {
@@ -55,9 +49,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     const product = db.getProduct(id)
 
     if (!product) {

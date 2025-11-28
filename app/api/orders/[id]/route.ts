@@ -11,13 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!order) {
       return createErrorResponse(404, ErrorCodes.NOT_FOUND, "Order not found")
     }
-    return NextResponse.json(order, {
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        Pragma: "no-cache",
-        Expires: "0",
-      },
-    })
+    return NextResponse.json(order)
   } catch (error) {
     return handleApiError(error)
   }

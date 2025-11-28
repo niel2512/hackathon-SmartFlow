@@ -6,13 +6,7 @@ import { auditLog } from "@/lib/audit-log"
 
 export async function GET() {
   try {
-    return NextResponse.json(db.getOrders(), {
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        Pragma: "no-cache",
-        Expires: "0",
-      },
-    })
+    return NextResponse.json(db.getOrders())
   } catch (error) {
     return handleApiError(error)
   }
