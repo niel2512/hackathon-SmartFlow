@@ -564,11 +564,7 @@ export default function OrdersPage() {
                         <button
                           key={status}
                           onClick={() => handleUpdateStatus(selectedOrder.id, status as any)}
-                          disabled={
-                            selectedOrder.status === status ||
-                            (selectedOrder.status === "Processing" && status === "Pending") ||
-                            (selectedOrder.status === "Completed" && (status === "Pending" || status === "Processing"))
-                          }
+                          disabled={selectedOrder.status === status}
                           className={`w-full px-3 py-2 rounded text-sm transition-colors ${
                             selectedOrder.status === status
                               ? "bg-primary text-primary-foreground"
