@@ -1,12 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { getProducts, createProduct } from "@/lib/supabase-service"
 import { validateProduct, validationErrorResponse } from "@/lib/validation"
 import { handleApiError } from "@/lib/error-handler"
 import { auditLog } from "@/lib/audit-log"
 
 export async function GET() {
   try {
-    const products = db.getProducts()
+    const products = await getProducts()
     return NextResponse.json(products)
   } catch (error) {
     return handleApiError(error)
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(validation.errors)
     }
 
-    const newProduct = db.createProduct(product)
+    const newProduct = await createProduct(product)
 
     await auditLog.record({
       userId: "system",

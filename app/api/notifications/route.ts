@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { getNotifications } from "@/lib/supabase-service"
 
 export async function GET() {
-  return NextResponse.json(db.getNotifications())
+  try {
+    const notifications = await getNotifications()
+    return NextResponse.json(notifications)
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to fetch notifications" }, { status: 500 })
+  }
 }

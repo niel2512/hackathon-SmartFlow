@@ -1,12 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { getOrders, createOrder, getProduct } from "@/lib/supabase-service"
 import { validateOrder, validationErrorResponse } from "@/lib/validation"
 import { handleApiError, createErrorResponse, ErrorCodes } from "@/lib/error-handler"
 import { auditLog } from "@/lib/audit-log"
 
 export async function GET() {
   try {
-    return NextResponse.json(db.getOrders())
+    const orders = await getOrders()
+    return NextResponse.json(orders)
   } catch (error) {
     return handleApiError(error)
   }
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     if (order.items && Array.isArray(order.items)) {
       for (const item of order.items) {
-        const product = db.getProduct(item.productId)
+        const product = await getProduct(item.productId)
         if (!product) {
           return createErrorResponse(400, ErrorCodes.NOT_FOUND, `Product with ID ${item.productId} not found`)
         }
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const newOrder = db.createOrder(order)
+    const newOrder = await createOrder(order)
 
     await auditLog.record({
       userId: "system",
