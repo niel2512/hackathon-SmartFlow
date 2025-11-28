@@ -1,4 +1,40 @@
 // In-memory database for SmartFlow with types
+import * as fs from "fs"
+import * as path from "path"
+
+const DATA_DIR = path.join(process.cwd(), ".data")
+const DB_FILE = path.join(DATA_DIR, "db.json")
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true })
+}
+
+// Load persisted data on server startup
+const loadData = () => {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"))
+      return data
+    }
+  } catch (error) {
+    console.error("[v0] Failed to load persisted data:", error)
+  }
+  return null
+}
+
+// Persist data to file
+const saveData = (data: any) => {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2))
+  } catch (error) {
+    console.error("[v0] Failed to save data to disk:", error)
+  }
+}
+
+// Load initial data
+const persistedData = loadData()
+
 export interface User {
   id: string
   name: string
@@ -47,16 +83,23 @@ export interface NotificationLog {
   createdAt: Date
 }
 
-// In-memory storage - Removed all dummy data; users, products, and orders start empty for production
-const users: User[] = []
+// In-memory storage
+const users: User[] = persistedData?.users || []
+let products: Product[] = persistedData?.products || []
+let orders: Order[] = persistedData?.orders || []
+let workflowRules: WorkflowRule[] = persistedData?.workflowRules || []
+const notificationLogs: NotificationLog[] = persistedData?.notificationLogs || []
 
-let products: Product[] = []
-
-let orders: Order[] = []
-
-let workflowRules: WorkflowRule[] = []
-
-const notificationLogs: NotificationLog[] = []
+// Helper function to persist data after each modification
+const persistDatabase = () => {
+  saveData({
+    users,
+    products,
+    orders,
+    workflowRules,
+    notificationLogs,
+  })
+}
 
 export const db = {
   // User operations
@@ -65,6 +108,7 @@ export const db = {
   createUser: (user: Omit<User, "id" | "createdAt">) => {
     const newUser = { ...user, id: Date.now().toString(), createdAt: new Date() }
     users.push(newUser)
+    persistDatabase() // Persist after user creation
     return newUser
   },
   getAllUsers: () => users,
@@ -75,18 +119,21 @@ export const db = {
   createProduct: (product: Omit<Product, "id" | "createdAt">) => {
     const newProduct = { ...product, id: Date.now().toString(), createdAt: new Date() }
     products.push(newProduct)
+    persistDatabase() // Persist after product creation
     return newProduct
   },
   updateProduct: (id: string, updates: Partial<Product>) => {
     const index = products.findIndex((p) => p.id === id)
     if (index !== -1) {
       products[index] = { ...products[index], ...updates }
+      persistDatabase() // Persist after product update
       return products[index]
     }
     return null
   },
   deleteProduct: (id: string) => {
     products = products.filter((p) => p.id !== id)
+    persistDatabase() // Persist after product deletion
   },
 
   // Order operations
@@ -106,6 +153,7 @@ export const db = {
       type: "Order",
       createdAt: new Date(),
     })
+    persistDatabase() // Persist after order creation
     return newOrder
   },
   updateOrderStatus: (id: string, status: Order["status"]) => {
@@ -113,7 +161,6 @@ export const db = {
     if (index !== -1) {
       orders[index] = { ...orders[index], status, updatedAt: new Date() }
 
-      // Trigger automation when order is completed
       if (status === "Completed") {
         notificationLogs.push({
           id: Date.now().toString(),
@@ -123,17 +170,20 @@ export const db = {
         })
       }
 
+      persistDatabase() // Persist after status update
       return orders[index]
     }
     return null
   },
   deleteOrder: (id: string) => {
     orders = orders.filter((o) => o.id !== id)
+    persistDatabase() // Persist after order deletion
   },
   updateOrder: (id: string, updates: Partial<Order>) => {
     const index = orders.findIndex((o) => o.id === id)
     if (index !== -1) {
       orders[index] = { ...orders[index], ...updates, updatedAt: new Date() }
+      persistDatabase() // Persist after order update
       return orders[index]
     }
     return null
@@ -144,10 +194,12 @@ export const db = {
   createWorkflowRule: (rule: Omit<WorkflowRule, "id" | "createdAt">) => {
     const newRule = { ...rule, id: Date.now().toString(), createdAt: new Date() }
     workflowRules.push(newRule)
+    persistDatabase() // Persist after workflow creation
     return newRule
   },
   deleteWorkflowRule: (id: string) => {
     workflowRules = workflowRules.filter((r) => r.id !== id)
+    persistDatabase() // Persist after workflow deletion
   },
 
   // Notification operations
@@ -159,6 +211,7 @@ export const db = {
       createdAt: new Date(),
     }
     notificationLogs.push(newNotification)
+    persistDatabase() // Persist after notification addition
     return newNotification
   },
 }
